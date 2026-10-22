@@ -7,24 +7,26 @@ on:
       - 'NorthEdgeLakerHealth-prototype.zip'
       - '.github/workflows/build-apk.yml'
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -34,14 +36,32 @@ jobs:
       - name: Extract app source
         run: unzip -q NorthEdgeLakerHealth-prototype.zip -d source
 
+      - name: Find Android project
+        shell: bash
+        run: |
+          project_file="$(find source -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)"
+          if [ -z "$project_file" ]; then
+            echo "Could not find settings.gradle or settings.gradle.kts inside the ZIP."
+            echo "Check that the archive contains the Android Studio project source."
+            exit 1
+          fi
+          echo "PROJECT_ROOT=$(dirname "$project_file")" >> "$GITHUB_ENV"
+          echo "Android project found at $(dirname "$project_file")"
+
       - name: Build debug APK
-        working-directory: source/NorthEdgeLakerHealth
-        run: gradle --no-daemon assembleDebug
+        shell: bash
+        run: |
+          if [ -f "$PROJECT_ROOT/gradlew" ]; then
+            chmod +x "$PROJECT_ROOT/gradlew"
+            "$PROJECT_ROOT/gradlew" --no-daemon assembleDebug
+          else
+            gradle --no-daemon --stacktrace -p "$PROJECT_ROOT" assembleDebug
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NorthEdgeLakerHealth-debug-apk
-          path: source/NorthEdgeLakerHealth/app/build/outputs/apk/debug/app-debug.apk
+          path: source/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
