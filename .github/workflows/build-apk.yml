@@ -51,11 +51,20 @@ jobs:
       - name: Build debug APK
         shell: bash
         run: |
+          cat > "$RUNNER_TEMP/northedge-jvm17.init.gradle" <<'EOF'
+          allprojects {
+            tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
+              sourceCompatibility = '17'
+              targetCompatibility = '17'
+            }
+          }
+          EOF
+
           if [ -f "$PROJECT_ROOT/gradlew" ]; then
             chmod +x "$PROJECT_ROOT/gradlew"
-            "$PROJECT_ROOT/gradlew" --no-daemon assembleDebug
+            "$PROJECT_ROOT/gradlew" --no-daemon --init-script "$RUNNER_TEMP/northedge-jvm17.init.gradle" assembleDebug
           else
-            gradle --no-daemon --stacktrace -p "$PROJECT_ROOT" assembleDebug
+            gradle --no-daemon --stacktrace --init-script "$RUNNER_TEMP/northedge-jvm17.init.gradle" -p "$PROJECT_ROOT" assembleDebug
           fi
 
       - name: Upload APK
